@@ -1,18 +1,13 @@
 import ldap as pyldap
 import ldap.sasl as sasl
-import ldap.modlist
-import re
-from datetime import datetime, date
 from copy import deepcopy
 from member import Member
 
 
 class LDAP:
-
     def __init__(self, user, password,
                  host='ldaps://ldap.csh.rit.edu:636',
                  base='ou=Users,dc=csh,dc=rit,dc=edu',
-                 bind='ou=Apps,dc=csh,dc=rit,dc=edu',
                  app=False,
                  objects=False):
         self.host = host
@@ -27,7 +22,6 @@ class LDAP:
 
         if app:
             self.ldap.simple_bind('uid=' + user + ',' + base, password)
-            # self.ldap.simple_bind('uid='+user+','+bind, password)
         else:
             try:
                 auth = sasl.gssapi("")
@@ -38,15 +32,15 @@ class LDAP:
                 print 'Are you sure you\'ve run kinit?'
                 print e
 
-    def members(self, uid="*"):
+    def members(self, uid='*'):
         """ members() issues an ldap query for all users, and returns a dict
             for each matching entry. This can be quite slow, and takes roughly
             3s to complete. You may optionally restrict the scope by specifying
             a uid, which is roughly equivalent to a search(uid='foo')
         """
-        entries = self.search(uid='*')
+        entries = self.search(uid=uid)
         if self.objects:
-            return self.memberObjects(entries)
+            return self.member_objects(entries)
         result = []
         for entry in entries:
             result.append(entry[1])
@@ -77,7 +71,7 @@ class LDAP:
                 director[1]['committee'] = committee[1]['cn'][0]
                 directors.append(director)
         if self.objects:
-            return self.memberObjects(directors)
+            return self.member_objects(directors)
         return directors
 
     def group(self, group_cn):
@@ -90,20 +84,20 @@ class LDAP:
         for member_dn in member_dns:
             members.append(self.search(dn=member_dn)[0])
         if self.objects:
-            return self.memberObjects(members)
+            return self.member_objects(members)
         return members
 
-    def getGroups(self, member_dn):
-        searchResult = self.search(base=self.groups, member=member_dn)
-        if len(searchResult) == 0:
+    def groups_for_member(self, member_dn):
+        search_result = self.search(base=self.groups, member=member_dn)
+        if len(search_result) == 0:
             return []
 
-        groupList = []
-        for group in searchResult:
-            groupList.append(group[1]['cn'][0])
-        return groupList
+        group_list = []
+        for group in search_result:
+            group_list.append(group[1]['cn'][0])
+        return group_list
 
-    def drinkAdmins(self):
+    def drink_admins(self):
         """ Returns a list of drink admins uids
         """
         admins = self.group('drink')
@@ -113,10 +107,11 @@ class LDAP:
         rtps = self.group('rtp')
         return rtps
 
-    def trimResult(self, result):
+    @staticmethod
+    def trim_result(result):
         return [x[1] for x in result]
 
-    def search(self, base=False, trim=False, **kwargs):
+    def search(self, base=None, trim=False, **kwargs):
         """ Returns matching entries for search in ldap
             structured as [(dn, {attributes})]
             UNLESS searching by dn, in which case the first match
@@ -136,15 +131,15 @@ class LDAP:
                 break
 
         if len(kwargs) > 1:
-            filterstr = '(&'+filterstr+')'
+            filterstr = '(&' + filterstr + ')'
 
         result = self.ldap.search_s(base,
-                                    pyldap.SCOPE_SUBTREE,
+                                    scope,
                                     filterstr,
                                     ['*', '+'])
         if base == self.users:
             for member in result:
-                groups = self.getGroups(member[0])
+                groups = self.groups_for_member(member[0])
                 member[1]['groups'] = groups
                 if 'eboard' in member[1]['groups']:
                     eboard_search = self.search(base=self.committees,
@@ -152,14 +147,12 @@ class LDAP:
                     if eboard_search:
                         member[1]['committee'] = eboard_search[0][1]['cn'][0]
             if self.objects:
-                return self.memberObjects(result)
-        finalResult = self.trimResult(result) if trim else result
-        return finalResult
+                return self.member_objects(result)
+        final_result = self.trim_result(result) if trim else result
+        return final_result
 
-    def modify(self, uid, base=False, **kwargs):
-        if not base:
-            base = self.users
-        dn = 'uid='+uid+',ou=Users,dc=csh,dc=rit,dc=edu'
+    def modify(self, uid, **kwargs):
+        dn = 'uid=' + uid + ',ou=Users,dc=csh,dc=rit,dc=edu'
         old_attrs = self.member(uid)
         new_attrs = deepcopy(old_attrs)
 
@@ -170,11 +163,11 @@ class LDAP:
 
         self.ldap.modify_s(dn, modlist)
 
-    def memberObjects(self, searchResults):
+    def member_objects(self, search_results):
         results = []
-        for result in searchResults:
-            newMember = Member(result, ldap=self)
-            results.append(newMember)
+        for result in search_results:
+            new_member = Member(result, ldap=self)
+            results.append(new_member)
         return results
 
 

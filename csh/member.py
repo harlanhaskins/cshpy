@@ -1,4 +1,6 @@
-import csh.utils
+from csh.utils import date_from_ldap_timestamp
+from datetime import date
+
 
 class Member(object):
     def __init__(self, member, ldap=None):
@@ -7,23 +9,23 @@ class Member(object):
             the object will use that connection to reload its data and
             modify its fields if you choose.
         """
-        self.specialFields = ("memberDict", "ldap", "specialFields")
+        self.special_fields = ("member_dict", "ldap", "special_fields")
         if len(member) < 2:
-            self.memberDict = {}
+            self.member_dict = {}
         else:
-            self.memberDict = member[1]
+            self.member_dict = member[1]
         self.ldap = ldap
 
     def __getattr__(self, attribute):
         """ Accesses the internal dictionary representation of
             a member and returns whatever data type it represents.
         """
-        if (attribute in self.specialFields):
+        if attribute in self.special_fields:
             return object.__getattribute__(self, attribute)
         try:
             # Grab the object at that key. It will be a list,
             # if it exists.
-            attributes = self.memberDict[attribute]
+            attributes = self.member_dict[attribute]
 
             # If we do get a list, and it only
             # contains one thing, just return that
@@ -44,53 +46,53 @@ class Member(object):
             access the internal ldap connection from the constructor
             and modify that parameter.
         """
-        if (attribute in self.specialFields):
+        if attribute in self.special_fields:
             return object.__setattr__(self, attribute, value)
-        if attribute in ("memberDict", "ldap"):
+        if attribute in ("member_dict", "ldap"):
             object.__setattr__(self, attribute, value)
             return
         if not self.ldap:
             return
         kwargs = {attribute: value}
         self.ldap.modify(uid=self.uid, **kwargs)
-        self.memberDict[attribute] = value
+        self.member_dict[attribute] = value
 
     def fields(self):
         """ Returns all of the keys in the internal dictionary.
         """
-        return self.memberDict.keys()
+        return self.member_dict.keys()
 
-    def isActive(self):
+    def is_active(self):
         """ Is the user active?
         """
         return bool(self.active)
 
-    def isAlumni(self):
+    def is_alumni(self):
         """ Is the user an alumnus/a?
         """
         return bool(self.alumni)
 
-    def isDrinkAdmin(self):
+    def is_drink_admin(self):
         """ Is the user a drink admin?
         """
         return bool(self.drinkAdmin)
 
-    def isOnFloor(self):
+    def is_on_floor(self):
         """ Is the user on floor?
         """
         return bool(self.onfloor)
 
-    def isEboard(self):
+    def is_eboard(self):
         """ Is the user on Eboard?
         """
         return 'eboard' in self.groups
 
-    def isRTP(self):
+    def is_rtp(self):
         """ Is the user an RTP?
         """
         return 'rtp' in self.groups
 
-    def isBirthday(self):
+    def is_birthday(self):
         """ Is it the user's birthday today?
         """
         if not self.birthday:
@@ -100,21 +102,21 @@ class Member(object):
         return (birthday.month == today.month and
                 birthday.day == today.day)
 
-    def birthdate(self):
+    def birth_date(self):
         """ Converts the user's birthday (if it exists) to a datetime.date
             object that can easily be compared with other dates.
         """
         if not self.birthday:
             return None
-        return utils.date_from_ldap_timestamp(self.birthday)
+        return date_from_ldap_timestamp(self.birthday)
 
-    def joindate(self):
+    def join_date(self):
         """ Converts the user's join date (if it exists) to a datetime.date
             object that can easily be compared with other dates.
         """
         if not self.memberSince:
             return None
-        return utils.date_from_ldap_timestamp(self.memberSince)
+        return date_from_ldap_timestamp(self.memberSince)
 
     def age(self):
         """ Returns the user's age, determined by their birthdate()
@@ -138,9 +140,9 @@ class Member(object):
         """
         if not self.ldap:
             return
-        self.memberDict = self.ldap.member(self.uid)
+        self.member_dict = self.ldap.member(self.uid)
 
-    def fullName(self):
+    def full_name(self):
         """ Returns a reliable full name (firstName lastName) for every
             member (as of the writing of this comment.)
         """
@@ -153,7 +155,7 @@ class Member(object):
             every key and value in their internal dictionary.
         """
         string = ""
-        for key in self.memberDict.keys():
+        for key in self.member_dict.keys():
             value = self.__getattr__(key)
             string += str(key) + ": " + str(value) + "\n"
         return string
